@@ -1,5 +1,11 @@
 {
   "installCommand": "npm install && npm --prefix client install",
   "buildCommand": "npm --prefix client run build",
-  "outputDirectory": "client/dist"
+  "outputDirectory": "client/dist",
+  "functions": {
+    "api/**/*.js": {
+      "includeFiles": "data/*.json",
+      "maxDuration": 60
+    }
+  }
 }

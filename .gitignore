@@ -6,3 +6,10 @@ client/dist
 .vercel
 *.log
 .DS_Store
+
+# Local research data, model checkpoints, and generated Python cache
+data/raw/
+data/processed/
+models/
+__pycache__/
+*.py[cod]

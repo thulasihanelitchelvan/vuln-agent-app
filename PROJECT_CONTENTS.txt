@@ -1,0 +1,25 @@
+SENTINEL — COMPLETE AUGUST/SEPTEMBER IMPLEMENTATION
+
+Important source files:
+- client/package.json and client/src/App.jsx: React frontend
+- api/[...path].js: Vercel API entry point
+- api/lib/agent.js: reconnaissance, detection/classification, verification/localization
+- api/lib/gemini.js: Gemini-only model adapter
+- api/lib/rag.js: local CWE/CVE retrieval
+- server/app.js and server/local.js: Express API and local server
+- data/cwe-knowledge-base.json and data/cve-knowledge-base.json: starter security reference corpus
+- data/demo-evaluation.jsonl: tiny smoke-test dataset, not for research conclusions
+- scripts/prepare_dataset.py: dataset normalization/deduplication
+- scripts/import_nvd_cves.py: NVD JSON 2.x import
+- scripts/evaluate.js: metrics/evaluation runner
+- scripts/run_ablation_matrix.js: four-way RAG/verification ablation
+- scripts/run_starcoder_baseline.py: inference with an existing LoRA adapter
+- tests/: local unit tests
+- docs/ARCHITECTURE.md: architecture and milestone checklist
+
+Install commands (Node.js 20+):
+  npm run install:all
+  copy .env.example .env   (PowerShell: Copy-Item .env.example .env)
+Fill GEMINI_API_KEY in .env, then run `npm run dev:server` and `npm run dev:client` in separate terminals.
+
+This archive does not include large third-party datasets or a StarCoder LoRA checkpoint. These must be supplied according to their licenses and the project's existing baseline setup.

@@ -84,6 +84,7 @@ export default function App() {
   const [activeStep, setActiveStep] = useState(-1);
   const [log, setLog] = useState([]);
   const [recon, setRecon] = useState(null);
+  const [ragContext, setRagContext] = useState(null);
   const [findings, setFindings] = useState(null);
   const [selectedFinding, setSelectedFinding] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -104,6 +105,7 @@ export default function App() {
     setActiveStep(0);
     setLog([]);
     setRecon(null);
+    setRagContext(null);
     setFindings(null);
     setSelectedFinding(null);
     setErrorMsg("");
@@ -120,14 +122,16 @@ export default function App() {
       setActiveStep(1);
 
       // ---------------- Stage 2: Vulnerability scan ----------------
-      pushLog("agent.scan > running vulnerability heuristics against mapped regions...");
-      const { findings: rawFindings } = await api("/api/scan", { code, recon: reconData });
+      pushLog("agent.rag > retrieving relevant CWE/CVE security references...");
+      const { findings: rawFindings, ragContext: ragData } = await api("/api/scan", { code, recon: reconData });
+      setRagContext(ragData || null);
+      pushLog(`agent.rag > ${ragData?.documents?.length || 0} reference(s) retrieved from local knowledge base`, "cyan");
       pushLog(`agent.scan > ${rawFindings.length} candidate issue(s) detected`, "amber");
       setActiveStep(2);
 
       // ---------------- Stage 3: Verify & localize ----------------
       pushLog("agent.verify > cross-checking candidates and refining fault locations...");
-      const { findings: verifiedFindings } = await api("/api/verify", { code, findings: rawFindings });
+      const { findings: verifiedFindings } = await api("/api/verify", { code, findings: rawFindings, ragContext: ragData });
       const finalFindings = verifiedFindings.map((f, i) => ({ ...f, _key: f.id || `finding-${i}` }));
       pushLog(`agent.verify > ${finalFindings.length} confirmed finding(s) after verification`, "green");
       pushLog("agent.pipeline > analysis complete", "green");
@@ -148,6 +152,7 @@ export default function App() {
     setActiveStep(-1);
     setLog([]);
     setRecon(null);
+    setRagContext(null);
     setFindings(null);
     setSelectedFinding(null);
     setErrorMsg("");
@@ -436,6 +441,12 @@ export default function App() {
                         {active && (
                           <div className="mt-2 text-[11px] leading-relaxed space-y-1.5" style={{ color: "#9BA3AF" }}>
                             <p>{f.explanation}</p>
+                            {f.evidence && (
+                              <p style={{ color: "#C9D1D9" }}>
+                                <span style={{ color: "#6B7280" }}>evidence » </span>
+                                <code>{f.evidence}</code>
+                              </p>
+                            )}
                             {f.recommendation && (
                               <p style={{ color: "#4CD9C0" }}>
                                 <span style={{ color: "#6B7280" }}>fix » </span>
@@ -447,6 +458,26 @@ export default function App() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {status === "done" && ragContext?.documents?.length > 0 && (
+                <div className="px-4 py-3 border-t" style={{ borderColor: "#1E2530", background: "#08090D" }}>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#4CD9C0" }}>Retrieved CWE / CVE references</span>
+                    <span className="text-[10px]" style={{ color: "#6B7280" }}>{ragContext.documents.length} retrieved · {ragContext.method}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {ragContext.documents.slice(0, 4).map((doc) => (
+                      <div key={doc.id} className="text-[11px] leading-relaxed" style={{ borderLeft: "2px solid #25313A", paddingLeft: 9 }}>
+                        <div className="font-semibold" style={{ color: "#C9D1D9" }}>{doc.id} · {doc.title}</div>
+                        <div style={{ color: "#8b8f98" }}>{doc.summary}</div>
+                        {doc.reference && (
+                          <a href={doc.reference} target="_blank" rel="noreferrer" className="inline-block mt-1 hover:underline" style={{ color: "#4C9AFF" }}>Open reference ↗</a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

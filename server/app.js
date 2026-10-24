@@ -1,64 +1,65 @@
 import express from "express";
 import cors from "cors";
 import { runRecon, runScan, runVerify, runFullPipeline } from "../api/lib/agent.js";
+import { retrieveSecurityKnowledge } from "../api/lib/rag.js";
 
 const app = express();
-
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 
-function handleError(res, err) {
-  console.error(err);
-  const status = err.status || 500;
-  res.status(status).json({ error: err.message || "Internal server error" });
+function handleError(res, error) {
+  console.error(error);
+  const status = Number.isInteger(error.status) ? error.status : 500;
+  res.status(status).json({ error: error.message || "Internal server error" });
 }
 
-app.get("/api/health", (req, res) => {
-  res.json({ ok: true, hasApiKey: Boolean(process.env.ANTHROPIC_API_KEY) });
+app.get("/api/health", (_req, res) => {
+  res.json({
+    ok: true,
+    provider: "Google Gemini",
+    model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
+    hasApiKey: Boolean(process.env.GEMINI_API_KEY),
+  });
 });
 
-// Stage 1 — Reconnaissance
 app.post("/api/recon", async (req, res) => {
   try {
     const { code } = req.body || {};
-    const recon = await runRecon(code);
-    res.json({ recon });
-  } catch (err) {
-    handleError(res, err);
-  }
+    res.json({ recon: await runRecon(code) });
+  } catch (error) { handleError(res, error); }
 });
 
-// Stage 2 — Vulnerability scan (depends on stage 1's output)
 app.post("/api/scan", async (req, res) => {
   try {
     const { code, recon } = req.body || {};
-    const findings = await runScan(code, recon);
-    res.json({ findings });
-  } catch (err) {
-    handleError(res, err);
-  }
+    const ragContext = retrieveSecurityKnowledge(code, { topK: process.env.RAG_TOP_K || 5 });
+    const findings = await runScan(code, recon, ragContext);
+    res.json({ findings, ragContext });
+  } catch (error) { handleError(res, error); }
 });
 
-// Stage 3 — Verify & localize (depends on stage 2's output)
 app.post("/api/verify", async (req, res) => {
   try {
-    const { code, findings } = req.body || {};
-    const verified = await runVerify(code, findings);
-    res.json({ findings: verified });
-  } catch (err) {
-    handleError(res, err);
-  }
+    const { code, findings, ragContext } = req.body || {};
+    const context = ragContext || retrieveSecurityKnowledge(`${code || ""}\n${JSON.stringify(findings || [])}`, { topK: process.env.RAG_TOP_K || 5 });
+    res.json({ findings: await runVerify(code, findings, context) });
+  } catch (error) { handleError(res, error); }
 });
 
-// Convenience endpoint: runs the full 3-stage pipeline server-side in one call.
 app.post("/api/analyze", async (req, res) => {
   try {
-    const { code } = req.body || {};
-    const result = await runFullPipeline(code);
-    res.json(result);
-  } catch (err) {
-    handleError(res, err);
+    const body = req.body || {};
+    res.json(await runFullPipeline(body.code, body.options || {}));
   }
+  catch (error) { handleError(res, error); }
+});
+
+app.post("/api/knowledge/search", (req, res) => {
+  try {
+    const { query, topK } = req.body || {};
+    if (typeof query !== "string" || !query.trim()) return res.status(400).json({ error: "`query` must be a non-empty string." });
+    res.json(retrieveSecurityKnowledge(query, { topK: topK || process.env.RAG_TOP_K || 5 }));
+  } catch (error) { handleError(res, error); }
 });
 
 export default app;
